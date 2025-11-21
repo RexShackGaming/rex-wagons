@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wagon Shop - Rex</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="wagon-shop-container">
+        <div class="shop-header">
+            <h1>Wagon Shop</h1>
+            <div class="player-info">
+                <span class="cash-display">Cash: <strong id="playerCash">$0</strong></span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="buy">Available Wagons</button>
+            <button class="tab-btn" data-tab="owned">My Wagons</button>
+        </div>
+
+         <!-- Buy Wagons Tab -->
+         <div id="buy" class="tab-content active">
+             <div class="filters-wrapper">
+                 <div class="filters-container">
+                     <div class="filter-section">
+                         <h3>Category</h3>
+                           <select id="categoryFilter" class="category-select">
+                               <option value="all" selected>All</option>
+                               <option value="carts">Carts</option>
+                               <option value="wagons">Wagons</option>
+                               <option value="stagecoaches">Stagecoaches</option>
+                               <option value="buggies">Buggies</option>
+                               <option value="industrial">Industrial</option>
+                               <option value="specialty">Specialty</option>
+                           </select>
+                     </div>
+
+                     <div class="filter-section">
+                         <h3>Sort</h3>
+                         <select id="sortBy" class="sort-select">
+                             <option value="default">Default</option>
+                             <option value="price-low">Price ↑</option>
+                             <option value="price-high">Price ↓</option>
+                             <option value="storage">Storage</option>
+                         </select>
+                     </div>
+
+                     <div class="filter-section">
+                         <h3>Min Price</h3>
+                         <input type="number" id="minPrice" class="price-input" placeholder="0" min="0">
+                     </div>
+
+                     <div class="filter-section">
+                         <h3>Max Price</h3>
+                         <input type="number" id="maxPrice" class="price-input" placeholder="0" min="0">
+                     </div>
+
+                     <div class="filter-section">
+                         <h3>&nbsp;</h3>
+                         <button id="applyPrice" class="apply-btn">Apply</button>
+                     </div>
+
+                     <div class="filter-info">
+                         <span id="resultCount">Showing 0 wagons</span>
+                     </div>
+                 </div>
+             </div>
+
+            <div class="wagons-grid" id="wagonsList">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- My Wagons Tab -->
+        <div id="owned" class="tab-content">
+            <div class="wagons-grid" id="ownedList">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+
+        <div class="shop-footer">
+            <p>Press <strong>ESC</strong> to close the shop</p>
+        </div>
+    </div>
+
+    <!-- Modal for wagon details -->
+    <div class="modal" id="wagonModal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div class="modal-body">
+                <h2 id="modalTitle">Wagon Details</h2>
+               <div class="modal-info">
+                       <p><strong>Model:</strong> <span id="modalModel"></span></p>
+                       <p><strong>Price:</strong> <span id="modalPrice"></span></p>
+                       <p id="modalSellPriceRow" style="display:none;"><strong>Sell Price:</strong> <span id="modalSellPrice"></span></p>
+                       <p><strong>Storage:</strong> <span id="modalStorage"></span></p>
+                       <p><strong>Slots:</strong> <span id="modalSlots"></span></p>
+                       <p><strong>Stored At:</strong> <span id="modalStorageLocation"></span></p>
+                       <p><strong>Description:</strong> <span id="modalDesc"></span></p>
+                    </div>
+                <div class="modal-actions">
+                       <button id="setActiveBtn" class="btn btn-success" style="display:none;">Set Active</button>
+                       <div id="modalActiveIndicator" class="active-indicator" style="display:none;">Active Wagon</div>
+                      <button id="purchaseBtn" class="btn btn-primary">Purchase</button>
+                      <button id="spawnBtn" class="btn btn-secondary" style="display:none;">Spawn Wagon</button>
+                      <button id="unstoreBtn" class="btn btn-secondary" style="display:none;">Retrieve Wagon</button>
+                      <button id="transferBtn" class="btn btn-info" style="display:none;">Transfer Wagon</button>
+                      <button id="sellBtn" class="btn btn-danger" style="display:none;">Sell Wagon</button>
+                 </div>
+             </div>
+         </div>
+     </div>
+
+     <!-- Modal for transfer destination selection -->
+     <div class="modal" id="transferModal">
+         <div class="modal-content">
+             <span class="close" id="transferClose">&times;</span>
+             <div class="modal-body">
+                 <h2>Transfer Wagon</h2>
+                 <div class="transfer-shops" id="transferShopsList">
+                     <!-- Populated by JavaScript -->
+                 </div>
+             </div>
+         </div>
+     </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

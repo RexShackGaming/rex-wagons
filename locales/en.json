@@ -1,0 +1,18 @@
+{
+    "cl_lang_1" : "client text",
+    "sv_lang_1" : "server text",
+    "transfer_wagon": "Transfer Wagon",
+    "select_destination": "Select Destination Shop",
+    "transfer_cost": "Transfer Cost: $%s",
+    "transfer_success": "Wagon transferred successfully!",
+    "transfer_failed": "Transfer failed!",
+    "insufficient_funds": "You don't have enough money for this transfer",
+    "transfer_distance": "Distance: %s meters",
+    "warehouse_shop": "%s (Distance: %s m) - Cost: $%s",
+    "sell_header": "Sell Wagon",
+    "sell_wagon": "Sell Wagon",
+    "sell_price": "Sell Price: $%s",
+    "sell_confirm": "Are you sure you want to sell this wagon for $%s?",
+    "sell_success": "Wagon sold successfully! You received $%s",
+    "sell_failed": "Failed to sell wagon"
+}
