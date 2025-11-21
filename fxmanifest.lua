@@ -2,8 +2,11 @@ fx_version 'cerulean'
 rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aware my resources *will* become incompatible once RedM ships.'
 game 'rdr3'
 
-description 'RSG Wagon Shop with NUI and Database Persistence'
-version '1.0.0'
+name 'rex-wagons'
+author 'RexShackGaming'
+description 'Advanced wagon shop for RSG Framework'
+version '2.0.0'
+url 'https://discord.gg/YUV7ebzkqs'
 
 shared_scripts {
     '@ox_lib/init.lua',
@@ -12,7 +15,8 @@ shared_scripts {
 
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
-    'server/server.lua'
+    'server/server.lua',
+    'server/versionchecker.lua'
 }
 
 client_scripts {
@@ -36,5 +40,15 @@ files {
 }
 
 ui_page 'html/index.html'
+
+escrow_ignore {
+    'client/*',
+    'html/*',
+    'installation/*',
+    'locales/*',
+    'server/*',
+    'shared/*',
+    'README.md'
+}
 
 lua54 'yes'
