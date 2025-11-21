@@ -4,7 +4,7 @@ local RSGCore = exports['rsg-core']:GetCoreObject()
 local playerWagons        = {} -- [citizenid] = { wagon table }
 local spawnedWagons      = {} -- [plate] = { src, citizenid, wagonId }
 local playerActiveWagon  = {} -- [citizenid] = plate (prevents double spawn)
-local playerShopLocation = {} -- [citizenid] = shop location index (which shop they're at)
+local playerShopLocation = {} -- [citizenid] = shop location id (which shop they're at)
 
 -- ====================================================================
 -- Database: Load all owned wagons on resource start
@@ -16,15 +16,21 @@ local function LoadAllWagons()
         return
     end
 
-    playerWagons = {}
-    for _, row in ipairs(result) do
-        local cid = row.citizen_id
-        playerWagons[cid] = playerWagons[cid] or {}
+     playerWagons = {}
+     for _, row in ipairs(result) do
+         local cid = row.citizen_id
+         playerWagons[cid] = playerWagons[cid] or {}
 
-        local shopIndex = row.storage_shop or 1
-        local shopName = Config.WagonShopLocations[shopIndex]?.name or "Unknown Shop"
+         local shopId = row.storage_shop or 'valentine'
+         local shopName = "Unknown Shop"
+         for _, shop in ipairs(Config.WagonShopLocations) do
+             if shop.id == shopId then
+                 shopName = shop.name
+                 break
+             end
+         end
 
-        table.insert(playerWagons[cid], {
+         table.insert(playerWagons[cid], {
             id          = row.wagon_id,
             label       = row.label,
             model       = row.model,
@@ -34,8 +40,9 @@ local function LoadAllWagons()
             slots       = row.slots,
             description = row.description or '',
             stored      = row.stored == 1 or row.stored == true,
-            storage_shop = shopIndex,
-            storage_shop_name = shopName
+            storage_shop = shopId,
+            storage_shop_name = shopName,
+            is_active   = row.is_active == 1 or row.is_active == true
         })
     end
 
@@ -78,12 +85,13 @@ end
 -- Track which shop location player is at
 -- ====================================================================
 RegisterNetEvent('rex-wagons:setShopLocation', function(shopLocationIndex)
-    local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
-    if not Player then return end
+     local src = source
+     local Player = RSGCore.Functions.GetPlayer(src)
+     if not Player then return end
 
-    local citizenid = Player.PlayerData.citizenid
-    playerShopLocation[citizenid] = shopLocationIndex
+     local citizenid = Player.PlayerData.citizenid
+     local shopId = Config.WagonShopLocations[shopLocationIndex]?.id or 'valentine'
+     playerShopLocation[citizenid] = shopId
 end)
 
 -- ====================================================================
@@ -142,487 +150,98 @@ RegisterNetEvent('rex-wagons:purchaseWagon', function(wagonId, playerCoords)
          plate = ('W%s'):format(math.random(100000, 999999))
      until not spawnedWagons[plate] and MySQL.scalar.await('SELECT 1 FROM rex_wagons WHERE plate = ?', { plate }) == nil
 
-     -- Get the shop location they're at to store with the wagon (use coords for accuracy)
-     local shopLocationIndex = 1
-     if playerCoords then
-         shopLocationIndex = GetNearestShop(playerCoords) or 1
-     else
-         shopLocationIndex = playerShopLocation[citizenid] or 1
-     end
+      -- Get the shop location they're at to store with the wagon (use coords for accuracy)
+      local shopId = playerShopLocation[citizenid] or 'valentine'
+      if playerCoords then
+          local nearestIdx = GetNearestShop(playerCoords) or 1
+          shopId = Config.WagonShopLocations[nearestIdx]?.id or 'valentine'
+      end
 
-    -- Insert into DB first (most important!)
-    local insertId = MySQL.insert.await([[
-        INSERT INTO rex_wagons (citizen_id, wagon_id, model, plate, label, price, storage, slots, description, storage_shop)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ]], {
-        citizenid,
-        wagonConfig.id,
-        wagonConfig.model,
-        plate,
-        wagonConfig.label,
-        wagonConfig.price,
-        wagonConfig.storage,
-        wagonConfig.slots,
-        wagonConfig.description or '',
-        shopLocationIndex
-    })
+      -- Insert into DB first (most important!)
+      local insertId = MySQL.insert.await([[
+          INSERT INTO rex_wagons (citizen_id, wagon_id, model, plate, label, price, storage, slots, description, storage_shop, stored)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ]], {
+          citizenid,
+          wagonConfig.id,
+          wagonConfig.model,
+          plate,
+          wagonConfig.label,
+          wagonConfig.price,
+          wagonConfig.storage,
+          wagonConfig.slots,
+          wagonConfig.description or '',
+          shopId,
+          true
+      })
 
     if not insertId then
         Player.Functions.AddMoney('cash', wagonConfig.price) -- rollback
-        lib.notify(src, { type = 'error', description = 'Database error – purchase cancelled' })
+        lib.notify(src, { type = 'error', description = 'Database error, wagon purchase cancelled' })
         return
     end
 
-     -- now safe to add to memory
-     playerWagons[citizenid] = playerWagons[citizenid] or {}
-     local shopName = Config.WagonShopLocations[shopLocationIndex]?.name or "Unknown Shop"
-     table.insert(playerWagons[citizenid], {
-         id          = wagonConfig.id,
-         label       = wagonConfig.label,
-         model       = wagonConfig.model,
-         plate       = plate,
-         price       = wagonConfig.price,
-         storage     = wagonConfig.storage,
-         slots       = wagonConfig.slots,
-         description = wagonConfig.description or '',
-         stored      = false,
-         storage_shop = shopLocationIndex,
-         storage_shop_name = shopName
-     })
+    -- Find shop name
+    local shopName = "Unknown Shop"
+    for _, shop in ipairs(Config.WagonShopLocations) do
+        if shop.id == shopId then
+            shopName = shop.name
+            break
+        end
+    end
 
+    -- Cache the new wagon in memory
+    local newWagon = {
+        id              = wagonConfig.id,
+        label           = wagonConfig.label,
+        model           = wagonConfig.model,
+        plate           = plate,
+        price           = wagonConfig.price,
+        storage         = wagonConfig.storage,
+        slots           = wagonConfig.slots,
+        description     = wagonConfig.description or '',
+        stored          = true,
+        storage_shop    = shopId,
+        storage_shop_name = shopName,
+        is_active       = false
+    }
+    table.insert(GetPlayerWagons(citizenid), newWagon)
+
+    -- Notify player of successful purchase
     lib.notify(src, { type = 'success', description = ('Purchased %s for $%d'):format(wagonConfig.label, wagonConfig.price) })
-    TriggerClientEvent('rex-wagons:purchaseSuccess', src)
+    TriggerClientEvent('rex-wagons:wagonPurchased', src, newWagon)
+
+    -- Update UI
+    TriggerClientEvent('rex-wagons:setShopData', src,
+        Config.AvailableWagons,
+        GetPlayerWagons(citizenid),
+        Player.PlayerData.money.cash or 0
+    )
 end)
 
 -- ====================================================================
--- Spawn wagon
+-- Get available wagons
 -- ====================================================================
-RegisterNetEvent('rex-wagons:spawnWagon', function(wagonId, playerCoords)
+RegisterNetEvent('rex-wagons:getAvailableWagons', function()
      local src = source
-     local Player = RSGCore.Functions.GetPlayer(src)
-     if not Player then return end
-
-     local citizenid = Player.PlayerData.citizenid
-
-     -- Prevent double spawn
-     if playerActiveWagon[citizenid] then
-         lib.notify(src, { type = 'error', description = 'You already have a wagon spawned. Return it first.' })
-         return
-     end
-
-     local owned = GetPlayerWagons(citizenid)
-     local wagonData = nil
-     for _, w in ipairs(owned) do
-         if w.id == wagonId then
-             wagonData = w
-             break
-         end
-     end
-
-     if not wagonData then
-         lib.notify(src, { type = 'error', description = 'You do not own this wagon' })
-         return
-     end
-
-     -- Prevent same wagon being spawned twice globally
-     if spawnedWagons[wagonData.plate] then
-         lib.notify(src, { type = 'error', description = 'This wagon is already in the world' })
-         return
-     end
-
-     -- Use the wagon's stored shop location
-     local storedShopIndex = wagonData.storage_shop or 1
-     local storedShop = Config.WagonShopLocations[storedShopIndex]
-     if not storedShop then
-         lib.notify(src, { type = 'error', description = 'Shop location not found' })
-         return
-     end
-
-     -- Find nearest shop to player and check if it matches wagon's stored location
-     if playerCoords then
-         local nearestIdx, nearestDist = GetNearestShop(playerCoords)
-         local spawnRadius = Config.WagonShop?.SpawnRadius or 10.0
-         
-         if nearestDist > spawnRadius then
-             lib.notify(src, { type = 'error', description = 'You are not at a wagon shop' })
-             return
-         end
-         
-         if nearestIdx ~= storedShopIndex then
-             lib.notify(src, { type = 'error', description = ('This wagon is stored at %s. Go there to spawn it.'):format(storedShop.name) })
-             return
-         end
-     end
-
-     -- All checks passed → register as spawned
-     spawnedWagons[wagonData.plate] = { src = src, citizenid = citizenid }
-     playerActiveWagon[citizenid] = wagonData.plate
-
-     TriggerClientEvent('rex-wagons:doSpawnWagon', src, wagonData, storedShopIndex)
+     TriggerClientEvent('rex-wagons:setAvailableWagons', src, Config.AvailableWagons)
 end)
 
 -- ====================================================================
--- Sell wagon
+-- Transfer wagon to different shop
 -- ====================================================================
-RegisterNetEvent('rex-wagons:deleteWagon', function(wagonId)
-     local src = source
-     local Player = RSGCore.Functions.GetPlayer(src)
-     if not Player then return end
-
-     local citizenid = Player.PlayerData.citizenid
-     local owned = GetPlayerWagons(citizenid)
-
-     local wagon = nil
-     local index = nil
-     for i, w in ipairs(owned) do
-         if w.id == wagonId then
-             wagon = w
-             index = i
-             break
-         end
-     end
-
-     if not wagon then
-         lib.notify(src, { type = 'error', description = 'Wagon not found' })
-         return
-     end
-
-     -- If it's currently spawned → clean up
-     if spawnedWagons[wagon.plate] then
-         TriggerClientEvent('rex-wagons:forceCleanup', spawnedWagons[wagon.plate].src or src, wagon.plate)
-         spawnedWagons[wagon.plate] = nil
-     end
-     if playerActiveWagon[citizenid] == wagon.plate then
-         playerActiveWagon[citizenid] = nil
-     end
-
-     -- Calculate sell price based on config percentage
-     local sellPercentage = Config.WagonShop.SellPercentage or 0.50
-     local sellPrice = math.ceil(wagon.price * sellPercentage)
-
-     -- Add money to player
-     Player.Functions.AddMoney('cash', sellPrice)
-
-      -- Remove inventory from stash table
-      local stashId = 'wagon_storage_' .. wagon.plate
-      MySQL.query.await('DELETE FROM inventories WHERE identifier = ?', { stashId })
-
-      -- Remove from DB
-      MySQL.query.await('DELETE FROM rex_wagons WHERE citizen_id = ? AND plate = ?', { citizenid, wagon.plate })
-
-      -- Remove from memory
-      table.remove(owned, index)
-
-     lib.notify(src, { type = 'success', description = ('Sold %s for $%d'):format(wagon.label, sellPrice) })
-     TriggerClientEvent('rex-wagons:wagonDeleted', src, wagon.plate)
-end)
-
--- ====================================================================
--- Player disconnect cleanup
--- ====================================================================
-AddEventHandler('playerDropped', function()
+RegisterNetEvent('rex-wagons:transferWagon', function(plate, targetShopIndex)
     local src = source
     local Player = RSGCore.Functions.GetPlayer(src)
     if not Player then return end
 
     local citizenid = Player.PlayerData.citizenid
-    local activePlate = playerActiveWagon[citizenid]
-
-    if activePlate and spawnedWagons[activePlate] then
-        TriggerClientEvent('rex-wagons:forceCleanup', spawnedWagons[activePlate].src or -1, activePlate)
-        spawnedWagons[activePlate] = nil
-    end
-
-    playerActiveWagon[citizenid] = nil
-end)
-
--- ====================================================================
--- Resource stop cleanup
--- ====================================================================
-AddEventHandler('onResourceStop', function(res)
-    if res ~= GetCurrentResourceName() then return end
-
-    for plate, data in pairs(spawnedWagons) do
-        if data.src and GetPlayerName(data.src) then
-            TriggerClientEvent('rex-wagons:forceCleanup', data.src, plate)
-        end
-    end
-
-    spawnedWagons = {}
-    playerActiveWagon = {}
-    print("^2[rex-wagons] Server-side cleanup complete.^7")
-end)
-
--- ====================================================================
--- Store wagon (put it away but keep ownership)
--- ====================================================================
-RegisterNetEvent('rex-wagons:storeWagon', function(plate)
-     local src = source
-     local Player = RSGCore.Functions.GetPlayer(src)
-     if not Player then return end
-
-     local citizenid = Player.PlayerData.citizenid
-
-     -- Check if wagon is spawned and belongs to player
-     if not spawnedWagons[plate] or spawnedWagons[plate].citizenid ~= citizenid then
-         lib.notify(src, { type = 'error', description = 'This wagon does not belong to you' })
-         return
-     end
-
-     -- Update DB to mark as stored
-     MySQL.query.await('UPDATE rex_wagons SET stored = TRUE WHERE plate = ?', { plate })
-
-     -- Clean up from world
-     TriggerClientEvent('rex-wagons:forceCleanup', src, plate)
-     spawnedWagons[plate] = nil
-     playerActiveWagon[citizenid] = nil
-
-     -- Update memory cache
-     local owned = GetPlayerWagons(citizenid)
-     for _, w in ipairs(owned) do
-         if w.plate == plate then
-             w.stored = true
-             break
-         end
-     end
-
-     lib.notify(src, { type = 'success', description = 'Wagon stored successfully' })
-     TriggerClientEvent('rex-wagons:wagonStored', src, plate)
-end)
-
--- ====================================================================
--- Unstore wagon (retrieve from storage)
--- ====================================================================
-RegisterNetEvent('rex-wagons:unstoreWagon', function(wagonId, playerCoords)
-     local src = source
-     local Player = RSGCore.Functions.GetPlayer(src)
-     if not Player then return end
-
-     local citizenid = Player.PlayerData.citizenid
-
-     -- Prevent double spawn
-     if playerActiveWagon[citizenid] then
-         lib.notify(src, { type = 'error', description = 'You already have a wagon spawned. Return it first.' })
-         return
-     end
-
-     local owned = GetPlayerWagons(citizenid)
-     local wagonData = nil
-     for _, w in ipairs(owned) do
-         if w.id == wagonId then
-             wagonData = w
-             break
-         end
-     end
-
-     if not wagonData then
-         lib.notify(src, { type = 'error', description = 'You do not own this wagon' })
-         return
-     end
-
-     if not wagonData.stored then
-          lib.notify(src, { type = 'error', description = 'This wagon is not stored' })
-          return
-      end
-
-      -- Prevent same wagon being spawned twice globally
-      if spawnedWagons[wagonData.plate] then
-          lib.notify(src, { type = 'error', description = 'This wagon is already in the world' })
-          return
-      end
-
-     -- Use the wagon's stored shop location
-     local storedShopIndex = wagonData.storage_shop or 1
-     local storedShop = Config.WagonShopLocations[storedShopIndex]
-     if not storedShop then
-         lib.notify(src, { type = 'error', description = 'Shop location not found' })
-         return
-     end
-
-     -- Find nearest shop to player and check if it matches wagon's stored location
-     if playerCoords then
-         local nearestIdx, nearestDist = GetNearestShop(playerCoords)
-         local spawnRadius = Config.WagonShop?.SpawnRadius or 10.0
-         
-         if nearestDist > spawnRadius then
-             lib.notify(src, { type = 'error', description = 'You are not at a wagon shop' })
-             return
-         end
-         
-         if nearestIdx ~= storedShopIndex then
-             lib.notify(src, { type = 'error', description = ('This wagon is stored at %s. Go there to retrieve it.'):format(storedShop.name) })
-             return
-         end
-     end
-
-    -- Update DB to mark as unstored
-    MySQL.query.await('UPDATE rex_wagons SET stored = FALSE WHERE plate = ?', { wagonData.plate })
-
-     -- Update memory cache
-     wagonData.stored = false
-
-     -- Register as spawned
-     spawnedWagons[wagonData.plate] = { src = src, citizenid = citizenid }
-     playerActiveWagon[citizenid] = wagonData.plate
-
-     lib.notify(src, { type = 'success', description = ('Retrieved %s from storage'):format(wagonData.label) })
-     TriggerClientEvent('rex-wagons:doSpawnWagon', src, wagonData, storedShopIndex)
-end)
-
--- Optional: utility function for other resources
-exports('GetPlayerWagons', GetPlayerWagons)
-
--- wagon storage
-RegisterNetEvent('rex-wagons:server:openStorage', function(wagonData)
-     local src = source
-     local stashId = 'wagon_storage_' .. wagonData.plate
-     local maxWeight = wagonData.storage
-     local slots = wagonData.slots
-     local inventoryData = { label = 'Wagon Storage', maxweight = maxWeight, slots = slots }
-     exports['rsg-inventory']:OpenInventory(src, stashId, inventoryData)
-end)
-
--- ====================================================================
--- Transfer wagon to another shop
--- ====================================================================
-RegisterNetEvent('rex-wagons:transferWagon', function(wagonId, targetShopIndex)
-    local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
-    if not Player then return end
-
-    local citizenid = Player.PlayerData.citizenid
-    local cash = Player.PlayerData.money.cash or 0
-
-    -- Validate target shop exists
-    if not Config.WagonShopLocations[targetShopIndex] then
-        lib.notify(src, { type = 'error', description = 'Invalid destination shop' })
-        return
-    end
+    local owned = GetPlayerWagons(citizenid)
 
     -- Find the wagon
-    local owned = GetPlayerWagons(citizenid)
     local wagonData = nil
     for _, w in ipairs(owned) do
-        if w.id == wagonId then
-            wagonData = w
-            break
-        end
-    end
-
-    if not wagonData then
-        lib.notify(src, { type = 'error', description = 'Wagon not found' })
-        return
-    end
-
-    -- Can't transfer to same shop
-    local currentShopIndex = wagonData.storage_shop
-    if currentShopIndex == targetShopIndex then
-        lib.notify(src, { type = 'error', description = 'Wagon is already stored at this shop' })
-        return
-    end
-
-     -- Calculate transfer cost based on non-linear distance formula: base + (distance ^ exponent) * multiplier
-     local currentShop = Config.WagonShopLocations[currentShopIndex]
-     local targetShop = Config.WagonShopLocations[targetShopIndex]
-     
-     local distance = #(currentShop.coords - targetShop.coords)
-     local basePrice = Config.WagonShop.TransferBasePrice or 100
-     local exponent = Config.WagonShop.TransferDistanceExponent or 1.3
-     local multiplier = Config.WagonShop.TransferDistanceMultiplier or 0.01
-     local transferCost = math.ceil(basePrice + (distance ^ exponent) * multiplier)
-
-    -- Check if player has enough money
-    if cash < transferCost then
-        lib.notify(src, { type = 'error', description = ('Insufficient funds. Cost: $%d, You have: $%d'):format(transferCost, cash) })
-        return
-    end
-
-    -- If wagon is spawned, can't transfer
-    if spawnedWagons[wagonData.plate] then
-        lib.notify(src, { type = 'error', description = 'Wagon must be stored before transferring' })
-        return
-    end
-
-    -- Deduct money
-    if not Player.Functions.RemoveMoney('cash', transferCost) then
-        lib.notify(src, { type = 'error', description = 'Payment failed' })
-        return
-    end
-
-     -- Update database
-     MySQL.query.await('UPDATE rex_wagons SET storage_shop = ? WHERE plate = ?', { targetShopIndex, wagonData.plate })
-
-     -- Update memory cache
-     wagonData.storage_shop = targetShopIndex
-     wagonData.storage_shop_name = targetShop.name
-
-     lib.notify(src, { type = 'success', description = ('Wagon transferred to %s for $%d'):format(targetShop.name, transferCost) })
-     TriggerClientEvent('rex-wagons:transferSuccess', src, wagonId)
-end)
-
--- ====================================================================
--- Get transfer data (shops and costs)
--- ====================================================================
-RegisterNetEvent('rex-wagons:getTransferData', function(wagonId)
-    local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
-    if not Player then return end
-
-    local citizenid = Player.PlayerData.citizenid
-
-    -- Find the wagon
-    local owned = GetPlayerWagons(citizenid)
-    local wagonData = nil
-    for _, w in ipairs(owned) do
-        if w.id == wagonId then
-            wagonData = w
-            break
-        end
-    end
-
-    if not wagonData then return end
-
-    local currentShopIndex = wagonData.storage_shop
-    local currentShop = Config.WagonShopLocations[currentShopIndex]
-    local transferData = {}
-
-     -- Build list of available destination shops with costs using non-linear formula
-     local basePrice = Config.WagonShop.TransferBasePrice or 100
-     local exponent = Config.WagonShop.TransferDistanceExponent or 1.3
-     local multiplier = Config.WagonShop.TransferDistanceMultiplier or 0.01
-     
-     for shopIndex, shop in ipairs(Config.WagonShopLocations) do
-         if shopIndex ~= currentShopIndex then
-             local distance = #(currentShop.coords - shop.coords)
-             local cost = math.ceil(basePrice + (distance ^ exponent) * multiplier)
-
-             table.insert(transferData, {
-                 shopIndex = shopIndex,
-                 name = shop.name,
-                 distance = math.floor(distance),
-                 cost = cost
-             })
-         end
-     end
-
-      TriggerClientEvent('rex-wagons:receiveTransferData', src, transferData)
-end)
-
--- ====================================================================
--- Set active wagon
--- ====================================================================
-RegisterNetEvent('rex-wagons:setActiveWagon', function(wagonId)
-    local src = source
-    local Player = RSGCore.Functions.GetPlayer(src)
-    if not Player then return end
-
-    local citizenid = Player.PlayerData.citizenid
-    local owned = GetPlayerWagons(citizenid)
-
-    -- Validate wagon belongs to player
-    local wagonData = nil
-    for _, w in ipairs(owned) do
-        if w.id == wagonId then
+        if tostring(w.plate) == tostring(plate) then
             wagonData = w
             break
         end
@@ -633,20 +252,212 @@ RegisterNetEvent('rex-wagons:setActiveWagon', function(wagonId)
         return
     end
 
-    -- Clear previous active wagon
-    MySQL.query.await('UPDATE rex_wagons SET is_active = FALSE WHERE citizen_id = ?', { citizenid })
+    local targetShopId = Config.WagonShopLocations[targetShopIndex]?.id or 'valentine'
+    local targetShop = Config.WagonShopLocations[targetShopIndex]
 
-    -- Set new active wagon
-    MySQL.query.await('UPDATE rex_wagons SET is_active = TRUE WHERE plate = ?', { wagonData.plate })
-
-    -- Update memory cache
-    for _, w in ipairs(owned) do
-        w.is_active = (w.plate == wagonData.plate)
+    -- Can't transfer to same shop
+    if wagonData.storage_shop == targetShopId then
+        lib.notify(src, { type = 'error', description = 'Wagon is already stored at this shop' })
+        return
     end
 
-    lib.notify(src, { type = 'success', description = ('Set %s as your active wagon'):format(wagonData.label) })
-    TriggerClientEvent('rex-wagons:activeWagonSet', src, wagonData)
+     -- Calculate transfer cost based on non-linear distance formula: base + (distance ^ exponent) * multiplier
+     local currentShopId = wagonData.storage_shop or 'valentine'
+     local currentShop = nil
+     for _, shop in ipairs(Config.WagonShopLocations) do
+         if shop.id == currentShopId then
+             currentShop = shop
+             break
+         end
+     end
+
+     if not currentShop then
+         lib.notify(src, { type = 'error', description = 'Current shop location not found' })
+         return
+     end
+
+      local basePrice = Config.WagonShop?.TransferBasePrice or 100
+      local exponent = Config.WagonShop?.TransferDistanceExponent or 1.3
+      local multiplier = Config.WagonShop?.TransferDistanceMultiplier or 0.01
+
+     local distance = #(currentShop.coords - targetShop.coords)
+     local transferCost = math.ceil(basePrice + (distance ^ exponent) * multiplier)
+
+     -- Money check
+     if Player.PlayerData.money.cash < transferCost then
+         lib.notify(src, { type = 'error', description = ('Transfer costs $%d, you only have $%d'):format(transferCost, Player.PlayerData.money.cash) })
+         return
+     end
+
+     Player.Functions.RemoveMoney('cash', transferCost)
+
+     -- Update database
+     MySQL.query.await('UPDATE rex_wagons SET storage_shop = ? WHERE plate = ?', { targetShopId, wagonData.plate })
+
+     -- Update memory cache
+     wagonData.storage_shop = targetShopId
+     wagonData.storage_shop_name = targetShop.name
+
+     lib.notify(src, { type = 'success', description = ('Wagon transferred to %s for $%d'):format(targetShop.name, transferCost) })
+
+     -- Notify client of successful transfer so it refreshes the UI
+     TriggerClientEvent('rex-wagons:transferSuccess', src)
+
+     -- Reload shop data
+     TriggerClientEvent('rex-wagons:setShopData', src,
+         Config.AvailableWagons,
+         GetPlayerWagons(citizenid),
+         Player.PlayerData.money.cash or 0
+     )
 end)
+
+-- ====================================================================
+-- Get transfer options
+-- ====================================================================
+RegisterNetEvent('rex-wagons:getTransferData', function(plate)
+      local src = source
+      local Player = RSGCore.Functions.GetPlayer(src)
+      if not Player then return end
+
+      local citizenid = Player.PlayerData.citizenid
+      local owned = GetPlayerWagons(citizenid)
+
+      local wagonData = nil
+      for _, w in ipairs(owned) do
+          if tostring(w.plate) == tostring(plate) then
+              wagonData = w
+              break
+          end
+      end
+      if not wagonData then return end
+
+     local currentShopId = wagonData.storage_shop or 'valentine'
+     local currentShop = nil
+     for _, shop in ipairs(Config.WagonShopLocations) do
+         if shop.id == currentShopId then
+             currentShop = shop
+             break
+         end
+     end
+
+      local basePrice = Config.WagonShop?.TransferBasePrice or 100
+      local exponent = Config.WagonShop?.TransferDistanceExponent or 1.3
+      local multiplier = Config.WagonShop?.TransferDistanceMultiplier or 0.01
+
+       local transferData = {}
+       for shopIndex, shop in ipairs(Config.WagonShopLocations) do
+           -- Only show shops that are different from the current shop
+           if shop.id ~= currentShopId then
+               local distance = #(currentShop.coords - shop.coords)
+               local cost = math.ceil(basePrice + (distance ^ exponent) * multiplier)
+               table.insert(transferData, {
+                    shopIndex = shopIndex,
+                    name = shop.name,
+                    distance = math.floor(distance),
+                    cost = cost
+                })
+           end
+       end
+
+      TriggerClientEvent('rex-wagons:showTransferOptions', src, transferData)
+ end)
+
+-- ====================================================================
+-- Set active wagon
+-- ====================================================================
+RegisterNetEvent('rex-wagons:setActiveWagon', function(plate, shopIndex)
+    local src = source
+    local Player = RSGCore.Functions.GetPlayer(src)
+    if not Player then return end
+
+    local citizenid = Player.PlayerData.citizenid
+    local owned = GetPlayerWagons(citizenid)
+
+    -- Validate wagon belongs to player
+    local wagonData = nil
+    for _, w in ipairs(owned) do
+        if tostring(w.plate) == tostring(plate) then
+            wagonData = w
+            break
+        end
+    end
+
+    if not wagonData then
+        lib.notify(src, { type = 'error', description = 'You do not own this wagon' })
+        return
+    end
+
+    -- Get fresh data from database to ensure we have the correct storage_shop
+    local dbResult = MySQL.query.await('SELECT storage_shop, label FROM rex_wagons WHERE plate = ?', { plate })
+    if dbResult and dbResult[1] then
+        wagonData.storage_shop = dbResult[1].storage_shop
+        wagonData.label = dbResult[1].label
+    end
+
+    -- Validate wagon is stored at the current shop
+    local currentShopId = Config.WagonShopLocations[shopIndex]?.id or 'valentine'
+    local wagonShopId = wagonData.storage_shop or 'valentine'
+    
+     if wagonShopId ~= currentShopId then
+         local shopName = 'Unknown Shop'
+         for _, shop in ipairs(Config.WagonShopLocations) do
+             if shop.id == wagonShopId then
+                 shopName = shop.name
+                 break
+             end
+         end
+         lib.notify(src, { type = 'error', description = ('This wagon is stored at %s'):format(shopName) })
+         return
+     end
+
+     -- Clear previous active wagon
+     MySQL.query.await('UPDATE rex_wagons SET is_active = FALSE WHERE citizen_id = ?', { citizenid })
+
+     -- Set new active wagon
+     MySQL.query.await('UPDATE rex_wagons SET is_active = TRUE WHERE plate = ?', { wagonData.plate })
+
+      -- Reload wagons from database to ensure cache is up-to-date
+      local dbResult = MySQL.query.await('SELECT * FROM rex_wagons WHERE citizen_id = ?', { citizenid })
+      local reloadedWagons = {}
+      if dbResult then
+          for _, row in ipairs(dbResult) do
+              local shopId = row.storage_shop or 'valentine'
+              local shopName = "Unknown Shop"
+              for _, shop in ipairs(Config.WagonShopLocations) do
+                  if shop.id == shopId then
+                      shopName = shop.name
+                      break
+                  end
+              end
+              table.insert(reloadedWagons, {
+                  id          = row.wagon_id,
+                  label       = row.label,
+                  model       = row.model,
+                  plate       = row.plate,
+                  price       = row.price,
+                  storage     = row.storage,
+                  slots       = row.slots,
+                  description = row.description or '',
+                  stored      = row.stored == 1 or row.stored == true,
+                  storage_shop = shopId,
+                  storage_shop_name = shopName,
+                  is_active   = row.is_active == 1 or row.is_active == true
+              })
+          end
+      end
+      playerWagons[citizenid] = reloadedWagons
+
+      lib.notify(src, { type = 'success', description = ('Set %s as your active wagon'):format(wagonData.label) })
+      TriggerClientEvent('rex-wagons:activeWagonSet', src, wagonData)
+      TriggerEvent('ox_lib:notify', { type = 'success', title = 'Active Wagon Updated', description = wagonData.label })
+      
+      -- Send UI update with refreshed shop data
+      TriggerClientEvent('rex-wagons:setShopData', src,
+          Config.AvailableWagons,
+          reloadedWagons,
+          Player.PlayerData.money.cash or 0
+      )
+ end)
 
 -- ====================================================================
 -- Get active wagon
@@ -668,8 +479,14 @@ local function LoadActiveWagonFromDB(citizenid)
      local result = MySQL.query.await('SELECT * FROM rex_wagons WHERE citizen_id = ? AND is_active = TRUE LIMIT 1', { citizenid })
      if result and result[1] then
          local row = result[1]
-         local shopIndex = row.storage_shop or 1
-         local shopName = Config.WagonShopLocations[shopIndex]?.name or "Unknown Shop"
+         local shopId = row.storage_shop or 'valentine'
+         local shopName = "Unknown Shop"
+         for _, shop in ipairs(Config.WagonShopLocations) do
+             if shop.id == shopId then
+                 shopName = shop.name
+                 break
+             end
+         end
          
          return {
              id          = row.wagon_id,
@@ -681,7 +498,7 @@ local function LoadActiveWagonFromDB(citizenid)
              slots       = row.slots,
              description = row.description or '',
              stored      = row.stored == 1 or row.stored == true,
-             storage_shop = shopIndex,
+             storage_shop = shopId,
              storage_shop_name = shopName,
              is_active   = true
          }
@@ -738,11 +555,11 @@ RegisterCommand('callwagon', function(source, args, rawCommand)
          end
      end
  
-     -- Register as spawned and trigger client spawn
-     spawnedWagons[activeWagon.plate] = { src = src, citizenid = citizenid }
-     playerActiveWagon[citizenid] = activeWagon.plate
- 
-     TriggerClientEvent('rex-wagons:spawnWagonNearPlayer', src, activeWagon)
+      -- Register as spawned and trigger client spawn
+      spawnedWagons[activeWagon.plate] = { src = src, citizenid = citizenid }
+      playerActiveWagon[citizenid] = activeWagon.plate
+  
+       TriggerClientEvent('rex-wagons:spawnWagonNearPlayer', src, activeWagon)
 end, false)
 
 -- ====================================================================
@@ -764,6 +581,203 @@ RegisterNetEvent('rex-wagons:callWagonFailedServer', function(plate)
      end
 
      lib.notify(src, { type = 'error', description = 'Failed to spawn wagon. Please try again.' })
+end)
+
+-- ====================================================================
+-- Spawn Owned Wagon
+-- ====================================================================
+RegisterNetEvent('rex-wagons:spawnWagon', function(plate, playerCoords, shopIndex)
+    local src = source
+    local Player = RSGCore.Functions.GetPlayer(src)
+    if not Player then return end
+
+    local citizenid = Player.PlayerData.citizenid
+    local wagonData = nil
+    
+    -- Find the wagon in player's owned wagons
+    local owned = GetPlayerWagons(citizenid)
+    for _, w in ipairs(owned) do
+        if w.plate == plate then
+            wagonData = w
+            break
+        end
+    end
+
+    if not wagonData then
+        lib.notify(src, { type = 'error', description = 'Wagon not found' })
+        return
+    end
+
+    -- Validate wagon is stored at the current shop
+    local currentShopId = Config.WagonShopLocations[shopIndex]?.id or 'valentine'
+    local wagonShopId = wagonData.storage_shop or 'valentine'
+    
+    if wagonShopId ~= currentShopId then
+        local shopName = 'Unknown Shop'
+        for _, shop in ipairs(Config.WagonShopLocations) do
+            if shop.id == wagonShopId then
+                shopName = shop.name
+                break
+            end
+        end
+        lib.notify(src, { type = 'error', description = ('You must go to %s to spawn this wagon'):format(shopName) })
+        return
+    end
+
+    -- Check if wagon is already spawned
+    if spawnedWagons[plate] then
+        lib.notify(src, { type = 'error', description = 'Your wagon is already in the world' })
+        return
+    end
+
+    -- Prevent double spawn
+    if playerActiveWagon[citizenid] then
+        lib.notify(src, { type = 'error', description = 'You already have a wagon spawned. Return it first.' })
+        return
+    end
+
+    -- If wagon is stored, unstore it first
+    if wagonData.stored then
+        MySQL.query.await('UPDATE rex_wagons SET stored = FALSE WHERE plate = ?', { plate })
+        wagonData.stored = false
+    end
+
+    -- Register as spawned and trigger client spawn
+    spawnedWagons[plate] = { src = src, citizenid = citizenid }
+    playerActiveWagon[citizenid] = plate
+
+     -- Find the shop index for the wagon's storage location
+     local shopIndexForSpawn = shopIndex
+     TriggerClientEvent('rex-wagons:doSpawnWagon', src, wagonData, shopIndexForSpawn)
+end)
+
+-- ====================================================================
+-- Unstore Wagon
+-- ====================================================================
+RegisterNetEvent('rex-wagons:unstoreWagon', function(plate, playerCoords)
+    local src = source
+    local Player = RSGCore.Functions.GetPlayer(src)
+    if not Player then return end
+
+    local citizenid = Player.PlayerData.citizenid
+    local wagonData = nil
+    
+    -- Find the wagon in player's owned wagons
+    local owned = GetPlayerWagons(citizenid)
+    for _, w in ipairs(owned) do
+        if w.plate == plate then
+            wagonData = w
+            break
+        end
+    end
+
+    if not wagonData then
+        lib.notify(src, { type = 'error', description = 'Wagon not found' })
+        return
+    end
+
+    if not wagonData.stored then
+        lib.notify(src, { type = 'error', description = 'Wagon is not stored' })
+        return
+    end
+
+    -- Unstore the wagon
+    MySQL.query.await('UPDATE rex_wagons SET stored = FALSE WHERE plate = ?', { plate })
+    wagonData.stored = false
+
+    lib.notify(src, { type = 'success', description = 'Wagon unstored successfully' })
+    TriggerClientEvent('rex-wagons:wagonUnstoredNotification', src, { plate = plate })
+end)
+
+-- ====================================================================
+-- Delete/Sell Wagon
+-- ====================================================================
+RegisterNetEvent('rex-wagons:deleteWagon', function(plate)
+    local src = source
+    local Player = RSGCore.Functions.GetPlayer(src)
+    if not Player then return end
+
+    local citizenid = Player.PlayerData.citizenid
+    local wagonData = nil
+    
+    -- Find the wagon in player's owned wagons
+    local owned = GetPlayerWagons(citizenid)
+    for _, w in ipairs(owned) do
+        if w.plate == plate then
+            wagonData = w
+            break
+        end
+    end
+
+    if not wagonData then
+        lib.notify(src, { type = 'error', description = 'Wagon not found' })
+        return
+    end
+
+    -- Calculate sell price (50% of purchase price)
+    local sellPrice = math.ceil(wagonData.price * 0.50)
+
+    -- Delete from database
+    MySQL.query.await('DELETE FROM rex_wagons WHERE plate = ?', { plate })
+
+    -- Remove from spawned wagons if applicable
+    if spawnedWagons[plate] then
+        spawnedWagons[plate] = nil
+    end
+
+    -- Give player the money
+    Player.Functions.AddMoney('cash', sellPrice)
+
+    lib.notify(src, { type = 'success', description = ('Wagon sold for $%d'):format(sellPrice) })
+    TriggerClientEvent('rex-wagons:wagonDeleted', src, { plate = plate })
+
+    -- Refresh player's wagon list
+    playerWagons[citizenid] = nil
+end)
+
+-- ====================================================================
+-- Store Wagon
+-- ====================================================================
+RegisterNetEvent('rex-wagons:storeWagon', function(plate)
+    local src = source
+    local Player = RSGCore.Functions.GetPlayer(src)
+    if not Player then return end
+
+    local citizenid = Player.PlayerData.citizenid
+    local wagonData = nil
+    
+    -- Check if wagon is spawned
+    if not spawnedWagons[plate] then
+        lib.notify(src, { type = 'error', description = 'Wagon is not spawned' })
+        return
+    end
+
+    -- Find the wagon in player's owned wagons
+    local owned = GetPlayerWagons(citizenid)
+    for _, w in ipairs(owned) do
+        if w.plate == plate then
+            wagonData = w
+            break
+        end
+    end
+
+    if not wagonData then
+        lib.notify(src, { type = 'error', description = 'Wagon not found' })
+        return
+    end
+
+    -- Store the wagon
+    MySQL.query.await('UPDATE rex_wagons SET stored = TRUE WHERE plate = ?', { plate })
+    wagonData.stored = true
+
+    -- Clean up spawned wagon tracking
+    spawnedWagons[plate] = nil
+    playerActiveWagon[citizenid] = nil
+
+    -- Tell client to delete the wagon entity
+    TriggerClientEvent('rex-wagons:wagonStored', src, plate)
+
+    lib.notify(src, { type = 'success', description = 'Wagon stored successfully' })
 end)
 
 -- ====================================================================

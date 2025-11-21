@@ -35,13 +35,16 @@ CreateThread(function()
                 
                 -- spawn NPC if player is close and NPC doesn't exist
                 if distance < spawnDistance and not spawnedPeds[k] then
+                    spawnedPeds[k] = 'pending' -- Mark as pending to prevent duplicate spawns
                     CreateThread(function()
-                        local spawnedPed = NearPed(v.npcmodel, v.npccoords, v.scenario)
+                        local spawnedPed = NearPed(v.npcmodel, v.npccoords, v.scenario, k)
                         if spawnedPed then
                             spawnedPeds[k] = { spawnedPed = spawnedPed }
                             if Config.Debug then
                                 print('[rex-wagons] Spawned NPC at ' .. v.name)
                             end
+                        else
+                            spawnedPeds[k] = nil -- Reset if spawn failed
                         end
                     end)
                 end
@@ -50,7 +53,7 @@ CreateThread(function()
                 if distance >= spawnDistance and spawnedPeds[k] then
                     CreateThread(function()
                         local pedData = spawnedPeds[k]
-                        if pedData and DoesEntityExist(pedData.spawnedPed) then
+                        if pedData and type(pedData) == 'table' and DoesEntityExist(pedData.spawnedPed) then
                             if Config.FadeIn then
                                 -- optimized fade out
                                 for i = 255, 0, -51 do
@@ -60,7 +63,7 @@ CreateThread(function()
                             end
                             DeletePed(pedData.spawnedPed)
                             if Config.Debug then
-                                print('[rex-butcher] Despawned NPC at ' .. v.name)
+                                print('[rex-wagons] Despawned NPC at ' .. v.name)
                             end
                         end
                         spawnedPeds[k] = nil
@@ -73,7 +76,7 @@ CreateThread(function()
     end
 end)
 
-function NearPed(npcmodel, npccoords, scenario)
+function NearPed(npcmodel, npccoords, scenario, shopIndex)
     -- check if model is already cached/loaded
     if not modelCache[npcmodel] then
         RequestModel(npcmodel)
@@ -131,7 +134,7 @@ function NearPed(npcmodel, npccoords, scenario)
 				icon = 'fas fa-shop',
 				label = 'Open Wagon Shop',
 				onSelect = function()
-					TriggerEvent('rex-wagons:openShop')
+					TriggerEvent('rex-wagons:openShop', shopIndex)
 				end,
 				distance = 3.0
 			},

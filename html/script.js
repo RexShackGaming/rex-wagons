@@ -75,9 +75,9 @@ document.querySelector('.close').onclick = () => modal.style.display = 'none';
 window.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
 
 function openModal(wagonId, isOwned) {
-      const wagon = isOwned
-          ? ownedWagons.find(w => w.id === wagonId)           // owned wagons use config `id`
-          : allWagons.find(w => w.id === wagonId);
+       const wagon = isOwned
+           ? ownedWagons.find(w => w.plate === wagonId)           // owned wagons use plate as unique ID
+           : allWagons.find(w => w.id === wagonId);
  
       if (!wagon) return;
       selectedWagon = wagon;
@@ -104,14 +104,14 @@ function openModal(wagonId, isOwned) {
         // If wagon is owned, indicate if it's active
         const activeIndicator = document.getElementById('modalActiveIndicator');
         if (activeIndicator) activeIndicator.style.display = (isOwned && wagon.is_active) ? 'block' : 'none';
-        // set active button handler
-        if (setActiveBtn) {
-            setActiveBtn.onclick = () => {
-                if (!selectedWagon) return;
-                postNUI('setActiveWagon', { wagonId: selectedWagon.id });
-                modal.style.display = 'none';
-            };
-        }
+         // set active button handler
+         if (setActiveBtn) {
+             setActiveBtn.onclick = () => {
+                 if (!selectedWagon) return;
+                 postNUI('setActiveWagon', { wagonId: selectedWagon.plate });
+                 modal.style.display = 'none';
+             };
+         }
        spawnBtn.style.display = isOwned && !wagon.stored ? 'block' : 'none';
        unstoreBtn.style.display = isOwned && wagon.stored ? 'block' : 'none';
        transferBtn.style.display = isOwned && wagon.stored ? 'block' : 'none';
@@ -241,7 +241,7 @@ function populateOwnedWagons() {
               // console.log('Owned wagon image URL:', imgUrl);
               const isActive = w.is_active ? 'active-wagon' : '';
               return `
-                 <div class="wagon-card ${isActive}" data-wagon-id="${w.id}" data-is-owned="true" data-stored="${w.stored ? 'true' : 'false'}">
+                  <div class="wagon-card ${isActive}" data-wagon-id="${w.plate}" data-is-owned="true" data-stored="${w.stored ? 'true' : 'false'}">
                      <div class="wagon-image" style="background-image: url('${imgUrl}');"></div>
                      ${w.is_active ? '<div class="active-badge">⭐ ACTIVE</div>' : ''}
                    <div class="wagon-name">${w.label}</div>
@@ -283,26 +283,26 @@ document.getElementById('purchaseBtn').onclick = () => {
 
 document.getElementById('spawnBtn').onclick = () => {
     if (!selectedWagon) return;
-    postNUI('spawnWagon', { wagonId: selectedWagon.id });
+    postNUI('spawnWagon', { wagonId: selectedWagon.plate });
     closeShop();
 };
 
 document.getElementById('unstoreBtn').onclick = () => {
      if (!selectedWagon) return;
-     postNUI('unstoreWagon', { wagonId: selectedWagon.id });
+     postNUI('unstoreWagon', { wagonId: selectedWagon.plate });
      closeShop();
 };
 
 document.getElementById('transferBtn').onclick = () => {
-      if (!selectedWagon) return;
-      postNUI('getTransferData', { wagonId: selectedWagon.id });
-      modal.style.display = 'none';
+       if (!selectedWagon) return;
+       postNUI('getTransferData', { wagonId: selectedWagon.plate });
+       modal.style.display = 'none';
 };
 
 document.getElementById('sellBtn').onclick = () => {
-       if (!selectedWagon) return;
-       postNUI('deleteWagonConfirm', { wagonId: selectedWagon.id, price: selectedWagon.price });
-       modal.style.display = 'none';
+        if (!selectedWagon) return;
+        postNUI('deleteWagonConfirm', { wagonId: selectedWagon.plate, price: selectedWagon.price });
+        modal.style.display = 'none';
  };
 
 // ====================================================================
@@ -376,10 +376,12 @@ window.addEventListener('message', (event) => {
         postNUI('notifySuccess', { message: 'Wagon deleted permanently' });
     }
 
-     if (data.type === 'purchaseSuccess') {
-         // Optional: refresh owned list and cash
-         postNUI('notifySuccess', { message: 'Wagon purchased!' });
-     }
+      if (data.type === 'purchaseSuccess') {
+          // Switch to My Wagons tab and refresh data
+          document.querySelector('[data-tab="owned"]').click();
+          postNUI('getShopData', {});
+          postNUI('notifySuccess', { message: 'Wagon purchased!' });
+      }
 
       if (data.type === 'wagonUnstoredNotification') {
           // Refresh the owned wagons list when a wagon is unstored
@@ -390,16 +392,25 @@ window.addEventListener('message', (event) => {
           }
       }
 
-      if (data.type === 'receiveTransferData') {
-          transferData = data.transferData;
-          openTransferModal();
-      }
-
-       if (data.type === 'transferSuccess') {
-           modal.style.display = 'none';
-           transferModal.style.display = 'none';
-           postNUI('notifySuccess', { message: 'Wagon transferred successfully!' });
+    if (data.type === 'showTransferOptions' || data.type === 'receiveTransferData') {
+           transferData = data.transferData;
+           openTransferModal();
        }
+
+        if (data.type === 'transferSuccess') {
+            modal.style.display = 'none';
+            transferModal.style.display = 'none';
+            postNUI('notifySuccess', { message: 'Wagon transferred successfully!' });
+        }
+
+         if (data.type === 'activeWagonUpdated') {
+             // Update the is_active flag in the owned wagons array
+             ownedWagons.forEach(wagon => {
+                 wagon.is_active = wagon.plate === data.wagonId;
+             });
+             populateOwnedWagons();
+             postNUI('notifySuccess', { message: 'Active wagon changed successfully!' });
+         }
 });
 
 // ====================================================================
@@ -429,7 +440,7 @@ function openTransferModal() {
 }
 
 function confirmTransfer(shopIndex, cost) {
-    if (!selectedWagon) return;
-    postNUI('transferWagon', { wagonId: selectedWagon.id, targetShopIndex: shopIndex });
-    transferModal.style.display = 'none';
-}
+     if (!selectedWagon) return;
+     postNUI('transferWagon', { wagonId: selectedWagon.plate, targetShopIndex: shopIndex });
+     transferModal.style.display = 'none';
+ }

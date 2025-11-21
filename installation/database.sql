@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS `rex_wagons` (
   `slots` int(11) DEFAULT 1,
   `description` longtext DEFAULT NULL,
   `stored` tinyint(1) DEFAULT 0,
-  `storage_shop` int(11) DEFAULT 1,
+  `storage_shop` varchar(50) DEFAULT 'valentine',
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `is_active` tinyint(1) DEFAULT 0,
   PRIMARY KEY (`id`),

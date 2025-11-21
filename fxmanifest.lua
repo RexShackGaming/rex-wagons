@@ -5,7 +5,7 @@ game 'rdr3'
 name 'rex-wagons'
 author 'RexShackGaming'
 description 'Advanced wagon shop for RSG Framework'
-version '2.0.1'
+version '2.0.2'
 url 'https://discord.gg/YUV7ebzkqs'
 
 shared_scripts {

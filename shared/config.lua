@@ -108,6 +108,7 @@ Config.AvailableWagons = {
 Config.WagonShopLocations = {
 
     {   --valentine
+        id = 'valentine',
         name = 'Valentine Wagons',
         coords = vector3(-360.72, 782.02, 116.21),
         npcmodel = 's_m_m_valdealer_01',
@@ -120,6 +121,7 @@ Config.WagonShopLocations = {
         spawnpoint = vec4(-355.75, 786.42, 116.12, 250.29),
     },
     {   --saint denis
+        id = 'saint_denis',
         name = 'Saint Denis Wagons',
         coords = vector3(2518.84, -1466.61, 46.27),
         npcmodel = 's_m_m_valdealer_01',
@@ -132,6 +134,7 @@ Config.WagonShopLocations = {
         spawnpoint = vec4(2507.51, -1471.01, 46.29, 99.80),
     },
     {   --blackwater
+        id = 'blackwater',
         name = 'Blackwater Wagons',
         coords = vector3(-877.52, -1359.46, 43.52),
         npcmodel = 's_m_m_valdealer_01',
@@ -144,6 +147,7 @@ Config.WagonShopLocations = {
         spawnpoint = vec4(-877.82, -1352.39, 43.20, 97.34),
     },
     {   --strawberry
+        id = 'strawberry',
         name = 'Strawberry Wagons',
         coords = vector3(-1811.61, -557.70, 155.99),
         npcmodel = 's_m_m_valdealer_01',
@@ -156,6 +160,7 @@ Config.WagonShopLocations = {
         spawnpoint = vec4(-1803.67, -547.45, 156.17, 325.33),
     },
     {   --dewberry
+        id = 'dewberry',
         name = 'Dewberry Wagons',
         coords = vector3(1210.27, -184.83, 101.33),
         npcmodel = 's_m_m_valdealer_01',
@@ -168,6 +173,7 @@ Config.WagonShopLocations = {
         spawnpoint = vec4(1207.03, -177.93, 101.06, 6.11),
     },
     {   --emerald ranch
+        id = 'emerald_ranch',
         name = 'Emerald Ranch Wagons',
         coords = vector3(1389.56, 318.96, 87.74),
         npcmodel = 's_m_m_valdealer_01',
@@ -180,6 +186,7 @@ Config.WagonShopLocations = {
         spawnpoint = vec4(1390.88, 313.03, 87.89, 108.72),
     },
     {   --van horn
+        id = 'van_horn',
         name = 'Van Horn Wagons',
         coords = vector3(2958.09, 789.14, 51.40),
         npcmodel = 's_m_m_valdealer_01',
@@ -192,6 +199,7 @@ Config.WagonShopLocations = {
         spawnpoint = vec4(2951.45, 787.21, 51.40, 190.73),
     },
     {   --tumbleweed
+        id = 'tumbleweed',
         name = 'Tumbleweed Wagons',
         coords = vector3(-5536.83, -3055.49, -1.26),
         npcmodel = 's_m_m_valdealer_01',
@@ -204,6 +212,7 @@ Config.WagonShopLocations = {
         spawnpoint = vec4(-5536.37, -3064.06, -1.16, 77.76),
     },
     {   --rhodes
+        id = 'rhodes',
         name = 'Rhodes Wagons',
         coords = vector3(1431.72, -1308.99, 77.70),
         npcmodel = 's_m_m_valdealer_01',

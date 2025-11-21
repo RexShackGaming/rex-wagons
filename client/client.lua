@@ -66,7 +66,7 @@ RegisterNUICallback('spawnWagon', function(data, cb)
     if isSpawningWagon then cb('ok') return end
     isSpawningWagon = true
     local playerCoords = GetEntityCoords(PlayerPedId())
-    TriggerServerEvent('rex-wagons:spawnWagon', data.wagonId, playerCoords)
+    TriggerServerEvent('rex-wagons:spawnWagon', data.wagonId, playerCoords, currentShopIndex)
     SetTimeout(2000, function()
         isSpawningWagon = false
         if NUIOpen then CloseShopNUI() end
@@ -122,16 +122,18 @@ end)
 
 RegisterNUICallback('setActiveWagon', function(data, cb)
     if data and data.wagonId then
-        TriggerServerEvent('rex-wagons:setActiveWagon', data.wagonId)
+        TriggerServerEvent('rex-wagons:setActiveWagon', data.wagonId, currentShopIndex)
     end
     cb('ok')
 end)
 
 -- ====================================================================
--- Purchase success → auto-close
+-- Purchase success → keep open and show My Wagons tab
 -- ====================================================================
 RegisterNetEvent('rex-wagons:purchaseSuccess', function()
-    if NUIOpen then CloseShopNUI() end
+    if NUIOpen then
+        SendNUIMessage({ type = 'purchaseSuccess' })
+    end
 end)
 
 -- ====================================================================
@@ -373,16 +375,25 @@ end)
 -- ====================================================================
 -- Transfer & active wagon events
 -- ====================================================================
+RegisterNetEvent('rex-wagons:showTransferOptions', function(transferData)
+    SendNUIMessage({ type = 'showTransferOptions', transferData = transferData })
+end)
+
 RegisterNetEvent('rex-wagons:receiveTransferData', function(transferData)
     SendNUIMessage({ type = 'receiveTransferData', transferData = transferData })
 end)
 
 RegisterNetEvent('rex-wagons:transferSuccess', function()
-    if NUIOpen then TriggerServerEvent('rex-wagons:getShopData') end
+     SendNUIMessage({ type = 'transferSuccess' })
+     if NUIOpen then TriggerServerEvent('rex-wagons:getShopData') end
 end)
 
 RegisterNetEvent('rex-wagons:updateActiveWagon', function(data) currentActiveWagon = data end)
 RegisterNetEvent('rex-wagons:activeWagonSet', function(data) currentActiveWagon = data end)
+
+RegisterNetEvent('rex-wagons:sendUIMessage', function(data)
+    SendNUIMessage(data)
+end)
 
 -- ====================================================================
 -- Resource stop cleanup
