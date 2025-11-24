@@ -41,14 +41,4 @@ files {
 
 ui_page 'html/index.html'
 
-escrow_ignore {
-    'client/*',
-    'html/*',
-    'installation/*',
-    'locales/*',
-    'server/*',
-    'shared/*',
-    'README.md'
-}
-
 lua54 'yes'
