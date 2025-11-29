@@ -190,22 +190,27 @@ RegisterNetEvent('rex-wagons:purchaseWagon', function(wagonId, playerCoords)
         end
     end
 
-    -- Cache the new wagon in memory
-    local newWagon = {
-        id              = wagonConfig.id,
-        label           = wagonConfig.label,
-        model           = wagonConfig.model,
-        plate           = plate,
-        price           = wagonConfig.price,
-        storage         = wagonConfig.storage,
-        slots           = wagonConfig.slots,
-        description     = wagonConfig.description or '',
-        stored          = true,
-        storage_shop    = shopId,
-        storage_shop_name = shopName,
-        is_active       = false
-    }
-    table.insert(GetPlayerWagons(citizenid), newWagon)
+     -- Cache the new wagon in memory
+     -- Ensure player exists in cache
+     if not playerWagons[citizenid] then
+         playerWagons[citizenid] = {}
+     end
+     
+     local newWagon = {
+         id              = wagonConfig.id,
+         label           = wagonConfig.label,
+         model           = wagonConfig.model,
+         plate           = plate,
+         price           = wagonConfig.price,
+         storage         = wagonConfig.storage,
+         slots           = wagonConfig.slots,
+         description     = wagonConfig.description or '',
+         stored          = true,
+         storage_shop    = shopId,
+         storage_shop_name = shopName,
+         is_active       = false
+     }
+     table.insert(playerWagons[citizenid], newWagon)
 
     -- Notify player of successful purchase
     lib.notify(src, { type = 'success', description = ('Purchased %s for $%d'):format(wagonConfig.label, wagonConfig.price) })
@@ -725,14 +730,20 @@ RegisterNetEvent('rex-wagons:deleteWagon', function(plate)
         spawnedWagons[plate] = nil
     end
 
-    -- Give player the money
-    Player.Functions.AddMoney('cash', sellPrice)
+     -- Give player the money
+     Player.Functions.AddMoney('cash', sellPrice)
 
-    lib.notify(src, { type = 'success', description = ('Wagon sold for $%d'):format(sellPrice) })
-    TriggerClientEvent('rex-wagons:wagonDeleted', src, { plate = plate })
+     lib.notify(src, { type = 'success', description = ('Wagon sold for $%d'):format(sellPrice) })
+     TriggerClientEvent('rex-wagons:wagonDeleted', src, { plate = plate })
 
-    -- Refresh player's wagon list
-    playerWagons[citizenid] = nil
+     -- Remove wagon from cache without clearing all wagons
+     local owned = GetPlayerWagons(citizenid)
+     for i = #owned, 1, -1 do
+         if owned[i].plate == plate then
+             table.remove(owned, i)
+             break
+         end
+     end
 end)
 
 -- ====================================================================
