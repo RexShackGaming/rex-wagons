@@ -97,7 +97,6 @@ Config.AvailableWagons = {
     { id = 'wagon_logwagon',        label = 'Log Hauler',        model = 'logwagon',        price = 950, storage = 450000, slots = 25, category = 'industrial', description = 'Hauls long logs for sawmills and lumberyards.' },
 
     -- SPECIALTY WAGONS
-    { id = 'wagon_huntercart01', label = 'Legendary Hunting Wagon',  model = 'huntercart01', price = 1200, storage = 450000, slots = 25, category = 'specialty', description = 'Special wagon for hunting and transporting trophies.' },
     { id = 'wagon_utilliwag',    label = 'Utility Wagon',            model = 'utilliwag',    price = 750,  storage = 100000, slots = 5, category = 'specialty', description = 'Reliable wagon for multiple work purposes.' }
 
 }
