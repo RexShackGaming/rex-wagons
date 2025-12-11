@@ -724,6 +724,8 @@ RegisterNetEvent('rex-wagons:deleteWagon', function(plate)
 
     -- Delete from database
     MySQL.query.await('DELETE FROM rex_wagons WHERE plate = ?', { plate })
+    -- Delete inventory from database
+    MySQL.query.await('DELETE FROM inventories WHERE identifier = ?', { 'wagon_'..plate })
 
     -- Remove from spawned wagons if applicable
     if spawnedWagons[plate] then
@@ -789,6 +791,17 @@ RegisterNetEvent('rex-wagons:storeWagon', function(plate)
     TriggerClientEvent('rex-wagons:wagonStored', src, plate)
 
     lib.notify(src, { type = 'success', description = 'Wagon stored successfully' })
+end)
+
+-- ====================================================================
+-- Wagon Storage
+-- ====================================================================
+RegisterNetEvent('rex-wagons:server:openStorage', function(wagonData)
+    local src = source
+    local Player = RSGCore.Functions.GetPlayer(src)
+    if not Player then return end
+    local data = { label = 'Wagon Storage', maxweight = wagonData.storage, slots = wagonData.slots }
+    exports['rsg-inventory']:OpenInventory(src, 'wagon_'..wagonData.plate, data)
 end)
 
 -- ====================================================================

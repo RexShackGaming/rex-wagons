@@ -14,5 +14,6 @@
     "sell_price": "Sell Price: $%s",
     "sell_confirm": "Are you sure you want to sell this wagon for $%s?",
     "sell_success": "Wagon sold successfully! You received $%s",
-    "sell_failed": "Failed to sell wagon"
+    "sell_failed": "Failed to sell wagon",
+    "wagon_storage": "Wagon Storage"
 }
