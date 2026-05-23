@@ -548,14 +548,15 @@ When calling wagon:
 
 ---
 
-## Support & Issues
+## Support
 
-For bug reports or feature requests, refer to the resource repository documentation.
+- [RSG Discord](https://discord.gg/eW3ADkf4Af)
 
-Key maintainers: REX Development Team
+## License
+
+This project is licensed under the terms specified in the LICENSE file.
 
 ---
 
-**Last Updated:** 2024  
-**Version:** 1.0  
-**Framework:** RSG Standalone
+**Author:** RexShack
+**Support Me:** [Buy me a Beer](https://buymeacoffee.com/rexshack)
